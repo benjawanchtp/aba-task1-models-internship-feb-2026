@@ -1,7 +1,15 @@
 #BERT-base-uncase version
 #3 sentiment - pos,neg,off
-import numpy as np
-import pandas as pd
+
+#pandas ใช้จัดการ Excel/ตารางข้อมูล
+#numpy ใช้จัดการ array + argmax
+#torch ใช้รันโมเดลบน CPU/MPS
+#datasets.Dataset ทำ dataset ให้ HuggingFace Trainer ใช้งานง่าย
+#transformers คือ tokenizer, model, Trainer, TrainingArguments ฯลฯ
+#sklearn ใช้ split และคำนวณ metric/report/confusion matrix
+
+import numpy as np 
+import pandas as pd 
 import torch
 import time
 from datetime import timedelta
@@ -27,8 +35,8 @@ from transformers import (
 EXCEL_PATH = "/Users/bbbbben/Desktop/Project in Japan/Task1/Original ABA Dataset for Version 2 (Oct 23, 2025), Senior Project, MUICT.xlsx"
 MODEL_NAME = "bert-base-uncased"
 
-MAX_LENGTH = 256
-TRAIN_RATIO = 0.8
+MAX_LENGTH = 256 #จำกัดความยาว token สูงสุด 256 (ยาวกว่านี้จะถูก truncate)
+TRAIN_RATIO = 0.8 #train 80% ที่เหลือ 20% จะแบ่งเป็น val/test อย่างละครึ่ง (10/10)
 SEED = 42
 
 # Columns by position: A=id, E=text, H=sentiment
@@ -45,6 +53,7 @@ id2label = {0: "Negative", 1: "Off", 2: "Positive"}
 # ----------------------------
 df_raw = pd.read_excel(EXCEL_PATH)
 
+#กันกรณีไฟล์ Excel มีคอลัมน์ไม่ถึงตำแหน่งที่ต้องการ
 if df_raw.shape[1] <= max(ID_COL_POS, TEXT_COL_POS, SENT_COL_POS):
     raise ValueError(
         f"Excel has {df_raw.shape[1]} columns; need at least {SENT_COL_POS+1} columns for A/E/H."
@@ -54,22 +63,27 @@ id_col = df_raw.columns[ID_COL_POS]
 text_col = df_raw.columns[TEXT_COL_POS]
 sent_col = df_raw.columns[SENT_COL_POS]
 
+#แปลงให้เป็น df มาตรฐาน: id/text/sentiment
 df = df_raw[[id_col, text_col, sent_col]].rename(
     columns={id_col: "id", text_col: "text", sent_col: "sentiment"}
 ).copy()
 
 # Clean text
-df = df.dropna(subset=["id", "text"]).copy()
+df = df.dropna(subset=["id", "text"]).copy() #ลบแถวที่ id หรือ text เป็น NaN
+
 df["text"] = df["text"].astype(str).str.replace("\n", " ", regex=False).str.strip()
-df = df[df["text"] != ""].copy()
+df = df[df["text"] != ""].copy() #ลบแถวที่ text ว่าง
 
 # Clean sentiment (map blank/NaN -> off)
 df["sentiment"] = df["sentiment"].astype(str).str.strip().str.lower()
 df.loc[df["sentiment"].isin(["", "nan", "none"]), "sentiment"] = "off"
 
 # Keep only 3 classes
+#ถ้า sentiment เป็นค่าอื่นที่ไม่อยู่ใน 3 คลาส → map จะได้ NaN → แล้วถูก drop ทิ้ง
 df["label"] = df["sentiment"].map(label2id)
 df = df.dropna(subset=["label"]).copy()
+
+#สุดท้าย label เป็น int 0/1/2
 df["label"] = df["label"].astype(int)
 
 print("Rows:", len(df))
@@ -78,10 +92,13 @@ print("Label counts:\n", df["sentiment"].value_counts())
 # ----------------------------
 # 2) Split train/val/test (stratified)
 # ----------------------------
+#stratify ทำให้สัดส่วนคลาส (neg/off/pos) ใกล้เคียงกันทุกชุด
+#รอบแรก: แบ่ง train 80% และ temp 20%
 train_df, temp_df = train_test_split(
     df, test_size=(1 - TRAIN_RATIO), random_state=SEED, stratify=df["label"]
 )
 
+#รอบสอง: temp 20% ถูกแบ่งครึ่งเป็น val 10% และ test 10%
 val_df, test_df = train_test_split(
     temp_df, test_size=0.5, random_state=SEED, stratify=temp_df["label"]
 )
@@ -91,8 +108,10 @@ print("Train/Val/Test sizes:", len(train_df), len(val_df), len(test_df))
 # ----------------------------
 # 3) Tokenization
 # ----------------------------
+#AutoTokenizer โหลด tokenizer ของ bert-base-uncased
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
+#tokenize_fn รับ batch ของข้อความ แล้วคืนค่า token ids, attention_mask ฯลฯ
 def tokenize_fn(batch):
     return tokenizer(batch["text"], truncation=True, max_length=MAX_LENGTH)
 
@@ -100,11 +119,13 @@ train_ds = Dataset.from_pandas(train_df[["text", "label"]].reset_index(drop=True
 val_ds   = Dataset.from_pandas(val_df[["text", "label"]].reset_index(drop=True)).map(tokenize_fn, batched=True)
 test_ds  = Dataset.from_pandas(test_df[["text", "label"]].reset_index(drop=True)).map(tokenize_fn, batched=True)
 
+#วลา batch แต่ละตัวความยาว token ไม่เท่ากัน → จะ pad ให้ยาวเท่ากันอัตโนมัติ “เฉพาะใน batch นั้น”
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
 # ----------------------------
 # 4) Model (BERT base uncased, 3 labels)
 # ----------------------------
+#โหลดโมเดล BERT-base-uncased สำหรับ classification โดยต่อหัว linear layer ออก logits 3 ค่า (สำหรับ 3 คลาส)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=3)
 
 # ----------------------------
@@ -143,9 +164,9 @@ args = TrainingArguments(
     per_device_eval_batch_size=16,
     num_train_epochs=3,
     weight_decay=0.01,
-    load_best_model_at_end=True,
-    metric_for_best_model="f1_macro",
-    greater_is_better=True,
+    load_best_model_at_end=True, #จบเทรนแล้วโหลดโมเดลที่ดีที่สุดกลับมาให้ trainer.model
+    metric_for_best_model="f1_macro", #ใช้ f1_macro เป็นตัววัดว่าโมเดลไหนดีที่สุด (มากกว่า accuracy เพราะมี 3 คลาส)
+    greater_is_better=True, #ค่า F1 ยิ่งมากยิ่งดี
     seed=SEED,
     logging_steps=50,
 )
@@ -163,6 +184,7 @@ trainer = Trainer(
 # ----------------------------
 # Timing: Training
 # ----------------------------
+#วัดเวลาตั้งแต่เริ่มเทรนจนจบ (รวมทุก epoch) แล้วแปลงเป็นรูปแบบ ชั่วโมง:นาที:วินาที
 train_start_time = time.time()
 
 trainer.train()
@@ -176,13 +198,14 @@ eval_start_time = time.time()
 # ----------------------------
 # 7) Evaluate on test
 # ----------------------------
+#วัด metric บน test set ด้วย trainer.evaluate() ซึ่งจะใช้ compute_metrics ที่เรากำหนดไว้
 test_metrics = trainer.evaluate(test_ds)
 print("\nTEST METRICS:", test_metrics)
 
-# Get predictions on test set
+# Get predictions on test set (ใช้ trainer.predict() เพื่อได้ทั้ง predictions และ label_ids)
 pred_output = trainer.predict(test_ds)
 
-# pred_output.predictions may be tuple in some models -> safe handling
+#ถ้า pred_output.predictions เป็น tuple (เช่น มี logits กับ hidden states) ให้ใช้ตัวแรกซึ่งเป็น logits
 preds_raw = pred_output.predictions
 if isinstance(preds_raw, tuple):
     preds_raw = preds_raw[0]
@@ -221,6 +244,7 @@ print(f"Evaluation time: {timedelta(seconds=int(eval_seconds))}")
 # ----------------------------
 # 8) Save model
 # ----------------------------
+#บันทึกโมเดลที่ดีที่สุด (ตาม f1_macro) และ tokenizer ไปยังโฟลเดอร์ bert_sentiment_3class_model
 SAVE_DIR = "bert_sentiment_3class_model"
 trainer.save_model(SAVE_DIR)
 tokenizer.save_pretrained(SAVE_DIR)
@@ -232,13 +256,16 @@ print(f"\nSaved model to: {SAVE_DIR}")
 best_model = trainer.model
 best_model.eval()
 
+#ถ้าเครื่องมี MPS (เช่น Mac ที่ใช้ชิป Apple Silicon) ให้รันบน MPS ถ้าไม่ก็รันบน CPU
 device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 best_model.to(device)
 
+#ฟังก์ชัน predict_texts รับ list ของข้อความ แล้วคืนค่า array ของ predicted label ids และ probabilities ของแต่ละคลาส
 def predict_texts(texts, batch_size=64):
     preds_all = []
     probs_all = []
 
+#รันทีละ batch เพื่อประหยัดหน่วยความจำ
     for i in range(0, len(texts), batch_size):
         batch = texts[i:i+batch_size]
         inputs = tokenizer(batch, return_tensors="pt", padding=True, truncation=True, max_length=MAX_LENGTH)
@@ -267,7 +294,7 @@ infer_seconds = infer_end_time - infer_start_time
 print(f"Inference time: {timedelta(seconds=int(infer_seconds))}")
 print(f"Avg inference time per sample: {infer_seconds/len(all_texts):.6f} sec")
 
-
+#สร้าง DataFrame สำหรับผลลัพธ์ โดยรวม id, text, gold sentiment, predicted label id, predicted sentiment (mapped จาก id2label) และ probabilities ของแต่ละคลาส
 out_df = df[["id", "text", "sentiment"]].copy()
 out_df["pred_id"] = pred_ids
 out_df["pred_sentiment"] = out_df["pred_id"].map(id2label)

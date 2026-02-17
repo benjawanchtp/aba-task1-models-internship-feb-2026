@@ -26,7 +26,7 @@ from transformers import (
 # 0) Config
 # ----------------------------
 EXCEL_PATH = "/Users/bbbbben/Desktop/Project in Japan/Task1/Original ABA Dataset for Version 2 (Oct 23, 2025), Senior Project, MUICT.xlsx"
-MODEL_NAME = "t5-base"   # ต้องเป็นตัวเล็ก
+MODEL_NAME = "t5-base"  
 
 TRAIN_RATIO = 0.8
 SEED = 42
@@ -47,10 +47,12 @@ id2label = {0: "Negative", 1: "Off", 2: "Positive"}
 # ----------------------------
 # Prompt (สำคัญสำหรับ T5)
 # ----------------------------
+# ฟังก์ชัน build_prompt จะรับข้อความ input และสร้าง prompt สำหรับ T5 โดยการแทนที่ newline ด้วย space และลบช่องว่างส่วนเกิน จากนั้นจะเติมคำอธิบาย "sentiment classification (negative, off, positive): " ไว้ข้างหน้าข้อความเพื่อให้โมเดลเข้าใจว่าต้องทำการจำแนก sentiment จากข้อความนี้
 def build_prompt(text: str) -> str:
     text = str(text).replace("\n", " ").strip()
     return f"sentiment classification (negative, off, positive): {text}"
 
+# ฟังก์ชัน normalize_pred_label จะรับสตริงที่เป็นผลลัพธ์จากการ decode ของโมเดลและทำการ normalize โดยการแปลงเป็น lowercase, ลบช่องว่างส่วนเกิน และกรองเฉพาะตัวอักษร จากนั้นจะตรวจสอบว่าเริ่มต้นด้วย "neg", "pos", หรือ "off" เพื่อแปลงเป็น "negative", "positive", หรือ "off" ตามลำดับ ถ้าไม่ตรงกับเงื่อนไขใดๆ จะคืนค่า "off" เป็นค่า default
 def normalize_pred_label(s: str) -> str:
     s = (s or "").strip().lower()
     s = "".join(ch for ch in s if ch.isalpha())
@@ -63,6 +65,7 @@ def normalize_pred_label(s: str) -> str:
     # fallback
     return "off"
 
+#แปลงเป็น id 0/1/2 เพื่อคำนวณ metric
 def preds_to_ids(decoded_preds):
     norm = [normalize_pred_label(x) for x in decoded_preds]
     return np.array([label2id.get(x, 1) for x in norm])  # default off
@@ -101,6 +104,7 @@ print("Label counts:\n", df["sentiment"].value_counts())
 # ----------------------------
 # 2) Split train/val/test (stratified)
 # ----------------------------
+#train = 80%, val = 10%, test = 10% โดยใช้ train_test_split สองครั้งเพื่อให้ได้สัดส่วนที่ต้องการ และใช้ stratify เพื่อให้แน่ใจว่าแต่ละชุดมีการกระจายของ label ที่เหมาะสม
 train_df, temp_df = train_test_split(
     df, test_size=(1 - TRAIN_RATIO), random_state=SEED, stratify=df["label"]
 )
@@ -112,18 +116,23 @@ print("Train/Val/Test sizes:", len(train_df), len(val_df), len(test_df))
 # ----------------------------
 # 3) Tokenization (seq2seq)
 # ----------------------------
+# ใช้ AutoTokenizer เพื่อโหลด tokenizer ของ T5-base ซึ่งจะใช้ในการแปลงข้อความ input และ target เป็น token ids สำหรับการ train โมเดล T5 ในรูปแบบ seq2seq โดยที่ input จะเป็น prompt ที่ประกอบด้วยคำอธิบายและข้อความ และ target จะเป็น sentiment ที่เป็นคำว่า negative/off/positive
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
+#inputs = prompt ที่บอก task + ข้อความ
+#targets = sentiment ที่เป็นคำว่า negative/off/positive (ไม่ใช่เลข 0/1/2 เพราะ T5 เป็น text-to-text)
 def preprocess(batch):
     inputs = [build_prompt(t) for t in batch["text"]]
     targets = [str(s).strip().lower() for s in batch["sentiment"]]
 
+#encode input
     model_inputs = tokenizer(
         inputs,
         max_length=MAX_SOURCE_LENGTH,
         truncation=True,
     )
 
+#encode target (labels)
     with tokenizer.as_target_tokenizer():
         labels = tokenizer(
             targets,
@@ -143,6 +152,7 @@ data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=MODEL_NAME)
 # ----------------------------
 # 4) Model
 # ----------------------------
+# ใช้ AutoModelForSeq2SeqLM เพื่อโหลดโมเดล T5-base ที่ถูกปรับแต่งสำหรับการทำ seq2seq โดยไม่ต้องระบุ num_labels เพราะ T5 จะเรียนรู้จากการ generate ข้อความเป้าหมายที่เป็น sentiment (negative/off/positive) แทนที่จะเป็นการจำแนกประเภทแบบดั้งเดิม
 model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
 
 # ----------------------------
@@ -150,12 +160,14 @@ model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
 # ----------------------------
 def compute_metrics(eval_pred):
     preds, labels = eval_pred
-
     decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
 
+#ตอน training/eval labels padding ถูกแทนเป็น -100
+#ecode -100 ไม่ได้ → เลยแทนด้วย pad_token_id ก่อนแล้วค่อย decode
     labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
     decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
+#แปลง decoded text เป็น id 0/1/2 เพื่อคำนวณ metric
     y_pred = preds_to_ids(decoded_preds)
     y_true = preds_to_ids(decoded_labels)
 
@@ -178,7 +190,7 @@ args = Seq2SeqTrainingArguments(
     output_dir="t5_base_3class_out",
     eval_strategy="epoch",
     save_strategy="epoch",
-    learning_rate=3e-4,               # ✅ T5 มักใช้สูงกว่า BERT
+    learning_rate=3e-4,               
     per_device_train_batch_size=16,
     per_device_eval_batch_size=16,
     num_train_epochs=3,
@@ -197,7 +209,6 @@ trainer = Seq2SeqTrainer(
     args=args,
     train_dataset=train_ds,
     eval_dataset=val_ds,
-    tokenizer=tokenizer,
     data_collator=data_collator,
     compute_metrics=compute_metrics,
 )
@@ -265,6 +276,7 @@ print(f"\nSaved model to: {SAVE_DIR}")
 # ----------------------------
 # 9) Predict on ALL rows + export CSV/XLSX
 # ----------------------------
+# ฟังก์ชัน predict_texts_text2text จะรับรายการข้อความและ batch_size จากนั้นจะสร้าง prompt สำหรับแต่ละข้อความและใช้ tokenizer เพื่อแปลงเป็น token ids จากนั้นจะใช้โมเดลที่ถูกฝึกแล้วเพื่อ generate ผลลัพธ์ในรูปแบบ text และ decode กลับเป็นข้อความปกติ โดยจะทำการประมวลผลเป็น batch เพื่อเพิ่มประสิทธิภาพในการทำนาย และคืนค่ารายการของผลลัพธ์ที่เป็นข้อความ
 def predict_texts_text2text(texts, batch_size=32):
     preds_text = []
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")

@@ -1,4 +1,5 @@
-
+#BERT-base-uncased version
+#K-fold cross-validation with K=1 (single split) and K=3
 import os
 import time
 from datetime import timedelta
@@ -24,10 +25,10 @@ from transformers import (
 EXCEL_PATH = "/Users/bbbbben/Desktop/Project in Japan/Task1/ABA Dataset (remove off).xlsx"
 MODEL_NAME = "roberta-base"  
 
-MAX_LENGTH = 256
+MAX_LENGTH = 256 #จำกัดความยาว token สูงสุด 256 (ยาวกว่านี้จะถูก truncate)
 SEED = 42
-TEST_SIZE = 0.2
-K_LIST = [1, 3]
+TEST_SIZE = 0.2 #แยก test set เอาไว้สำหรับทุกการทดลอง (test set = 20%)
+K_LIST = [1, 3] #K=1 คือ single split (train/val/test) และ K=3 คือ 3-fold cross-validation (แต่ละ fold มี train/val และใช้ test set เดียวกันสำหรับทุก fold)
 
 # Columns by position: A=id, G=text, H=sentiment
 ID_COL_POS = 0     # Column A
@@ -77,9 +78,11 @@ def load_dataset_from_excel(path: str) -> pd.DataFrame:
 # ----------------------------
 # 2) Tokenize + HF Dataset
 # ----------------------------
+#ฟังก์ชัน make_hf_dataset รับ DataFrame ที่มีคอลัมน์ "text" และ "label" แล้วแปลงเป็น Hugging Face Dataset พร้อม tokenization โดยใช้ tokenizer ที่กำหนดและ max_length สำหรับการ truncate
 def make_hf_dataset(df: pd.DataFrame, tokenizer, max_length: int) -> Dataset:
     hf = Dataset.from_pandas(df[["text", "label"]].reset_index(drop=True))
 
+#ฟังก์ชัน tokenize_fn จะถูกใช้ใน hf.map เพื่อแปลงข้อความในคอลัมน์ "text" เป็น token ids โดยใช้ tokenizer ที่กำหนด และจะทำการ truncate ข้อความที่ยาวเกิน max_length
     def tokenize_fn(batch):
         return tokenizer(batch["text"], truncation=True, max_length=max_length)
 
@@ -89,6 +92,7 @@ def make_hf_dataset(df: pd.DataFrame, tokenizer, max_length: int) -> Dataset:
 # ----------------------------
 # 3) Metrics
 # ----------------------------
+#ฟังก์ชัน compute_metrics จะถูกใช้ใน Trainer เพื่อคำนวณ metric ต่างๆ เช่น accuracy, f1_macro, precision_macro, recall_macro จาก predictions และ labels ที่ได้จากการประเมินผล
 def compute_metrics(eval_pred):
     preds = eval_pred.predictions
     labels = eval_pred.label_ids
@@ -115,7 +119,8 @@ def compute_metrics(eval_pred):
 # ----------------------------
 # 4) Train one fold
 # ----------------------------
-def train_one_fold(train_df, val_df, test_df, fold_name: str):
+#ฟังก์ชัน train_one_fold รับ DataFrame สำหรับ train, val, test และชื่อ fold จากนั้นจะทำการสร้าง tokenizer, data collator, Hugging Face Datasets, model, และ Trainer เพื่อฝึกสอนโมเดลใน fold นั้นๆ และประเมินผลบน test set โดยจะคืนค่า metrics ที่ได้จากการประเมินผลพร้อมกับเวลาที่ใช้ในการฝึกและทดสอบ
+def train_one_fold(train_df, val_df, test_df, fold_name: str): #ใช้สำหรับ train + evaluate โมเดลใน 1 fold
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
@@ -135,7 +140,7 @@ def train_one_fold(train_df, val_df, test_df, fold_name: str):
         output_dir=out_dir,
         eval_strategy="epoch",
         save_strategy="epoch",
-        save_total_limit=1,
+        save_total_limit=1, #กันเมมเต็ม
         learning_rate=2e-5,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=16,
@@ -154,7 +159,6 @@ def train_one_fold(train_df, val_df, test_df, fold_name: str):
         args=args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        #tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
     )
@@ -177,10 +181,10 @@ def train_one_fold(train_df, val_df, test_df, fold_name: str):
 # ----------------------------
 # 5) K-fold runner
 # ----------------------------
-def run_kfold(df: pd.DataFrame):
+def run_kfold(df: pd.DataFrame): #คุมการทดลองทั้งหมด
     trainval_df, test_df = train_test_split(
         df,
-        test_size=TEST_SIZE,
+        test_size=TEST_SIZE, #แยก test set เอาไว้สำหรับทุกการทดลอง (test set = 20)
         random_state=SEED,
         stratify=df["label"]
     )
@@ -191,7 +195,7 @@ def run_kfold(df: pd.DataFrame):
 
     all_results = []
 
-    for K in K_LIST:
+    for K in K_LIST: #วนลูปทดลองตามค่า K ใน K_LIST
         print("\n" + "=" * 60)
         print(f"RUN K = {K}")
         print("=" * 60)
@@ -218,7 +222,7 @@ def run_kfold(df: pd.DataFrame):
             })
             continue
 
-        skf = StratifiedKFold(n_splits=K, shuffle=True, random_state=SEED)
+        skf = StratifiedKFold(n_splits=K, shuffle=True, random_state=SEED) # กรณี K > 1
         X = trainval_df["text"].values
         y = trainval_df["label"].values
 
@@ -259,7 +263,7 @@ def run_kfold(df: pd.DataFrame):
 # ----------------------------
 # 6) MAIN
 # ----------------------------
-if __name__ == "__main__":
+if __name__ == "__main__": 
     df = load_dataset_from_excel(EXCEL_PATH)
 
     print("Label counts:")
