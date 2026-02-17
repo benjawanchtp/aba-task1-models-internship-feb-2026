@@ -54,6 +54,7 @@ ID2LABEL = {0: "Negative", 1: "Positive"}
 # ----------------------------
 # 1) Prompt + label helpers (หัวใจของ T5)
 # ----------------------------
+
 def build_prompt(text: str) -> str:
     text = str(text).replace("\n", " ").strip()
     return f"sentiment classification (negative, positive): {text}"
@@ -66,6 +67,7 @@ def normalize_label(s: str) -> str:
     if s.startswith("pos"):
         return "positive"
     return "negative"  # fallback ป้องกันพังเวลา decode แปลกๆ
+
 
 def labels_to_ids(texts):
     return np.array([LABEL2ID[normalize_label(t)] for t in texts], dtype=int)
@@ -88,6 +90,7 @@ df = df_raw[[id_col, text_col, sent_col]].rename(
     columns={id_col: "id", text_col: "text", sent_col: "sentiment"}
 ).copy()
 
+
 df = df.dropna(subset=["text", "sentiment"]).copy()
 df["text"] = df["text"].astype(str).str.replace("\n", " ", regex=False).str.strip()
 df["sentiment"] = df["sentiment"].astype(str).str.strip().str.lower()
@@ -102,6 +105,7 @@ print("Label counts:\n", df["sentiment"].value_counts())
 # ----------------------------
 # 3) Split Train/Val/Test (เหมือน BERT auto)
 # ----------------------------
+# ใช้ train_test_split สองรอบ: รอบแรกแยก test ออกมา, รอบสองแยก val จาก trainval
 trainval_df, test_df = train_test_split(
     df, test_size=TEST_SIZE, random_state=SEED, stratify=df["label"]
 )
@@ -115,11 +119,13 @@ train_df, val_df = train_test_split(
 print("Train/Val/Test sizes:", len(train_df), len(val_df), len(test_df))
 
 # ----------------------------
-# 4) Tokenize + Dataset (เตรียมครั้งเดียว ใช้ซ้ำทุก trial)
+# 4) Tokenize + Dataset 
 # ----------------------------
+
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer)
 
+# ฟังก์ชัน preprocess สำหรับ map ลง Dataset จะทำการสร้าง prompt จาก text และ normalize label จาก sentiment แล้ว tokenize ทั้ง input และ target 
 def preprocess(batch):
     inputs = [build_prompt(t) for t in batch["text"]]
     targets = [normalize_label(s) for s in batch["sentiment"]]
@@ -143,6 +149,7 @@ def make_ds(frame: pd.DataFrame) -> Dataset:
     ds = Dataset.from_pandas(frame[["text", "sentiment"]].reset_index(drop=True))
     return ds.map(preprocess, batched=True)
 
+# สร้าง Dataset สำหรับ train/val/test โดยใช้ฟังก์ชัน make_ds ที่ทำการ map preprocess ซึ่งจะได้คอลัมน์ input_ids, attention_mask, labels 
 train_ds = make_ds(train_df)
 val_ds   = make_ds(val_df)
 test_ds  = make_ds(test_df)
@@ -150,6 +157,8 @@ test_ds  = make_ds(test_df)
 # ----------------------------
 # 5) Metrics (Seq2Seq: decode generated tokens -> map to neg/pos)
 # ----------------------------
+
+# ฟังก์ชัน compute_metrics จะรับ eval_pred ซึ่งประกอบด้วย preds (token ids ที่โมเดล generate) และ labels (token ids จริงที่มี -100 สำหรับ padding) โดยจะ decode ทั้งคู่เป็นข้อความ แล้ว map เป็น 0/1 ก่อนคำนวณ accuracy, f1_macro, precision_macro, recall_macro
 def compute_metrics(eval_pred):
     preds, labels = eval_pred
 
@@ -180,7 +189,7 @@ def compute_metrics(eval_pred):
     }
 
 # ----------------------------
-# 6) model_init (จำเป็นสำหรับ HPO ให้แต่ละ trial เริ่มใหม่)
+# 6) model_init 
 # ----------------------------
 def model_init():
     return AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
@@ -188,6 +197,8 @@ def model_init():
 # ----------------------------
 # 7) Optuna objective
 # ----------------------------
+
+# ฟังก์ชัน objective สำหรับ Optuna จะรับ trial แล้วทำการตั้งค่า hyperparameters จาก trial.suggest_* จากนั้นสร้าง Seq2SeqTrainingArguments และ Seq2SeqTrainer เพื่อฝึกสอนโมเดลบน train_ds และประเมินผลบน val_ds โดยจะเก็บ metrics ต่างๆ เป็น user attributes ของ trial และคืนค่า f1_macro เพื่อให้ Optuna ใช้ในการ optimize
 def objective(trial):
     set_seed(SEED)
 
@@ -228,9 +239,11 @@ def objective(trial):
         callbacks=[EarlyStoppingCallback(early_stopping_patience=2)],
     )
 
+# Timing การฝึกสอนและประเมินผลในแต่ละ trial เพื่อเก็บเป็น user attributes ของ trial นั้นๆ
     t0 = time.time()
     trainer.train()
     train_seconds = time.time() - t0
+
 
     metrics = trainer.evaluate(val_ds)
 
@@ -245,6 +258,7 @@ def objective(trial):
 # ----------------------------
 # 8) Run study + export all trials
 # ----------------------------
+# สร้าง Optuna study แล้ว optimize ด้วย objective function ที่เราสร้างไว้ โดยกำหนด n_trials ตามที่ต้องการ จากนั้นดึง best_params และ best_value (f1_macro) มาแสดงผล
 study = optuna.create_study(direction="maximize")
 study.optimize(objective, n_trials=N_TRIALS)
 best_params = study.best_params
@@ -280,6 +294,7 @@ print(f"\n✅ Saved trials history to: {HISTORY_XLSX}")
 # ----------------------------
 # 9) Train final model with best hyperparameters
 # ----------------------------
+
 final_args = Seq2SeqTrainingArguments(
     output_dir=os.path.join(OUTPUT_DIR, "t5_best_model_run"),
     eval_strategy="epoch",
@@ -312,6 +327,7 @@ final_trainer.train()
 # ----------------------------
 # 10) Evaluate on test + report + save predictions + save model
 # ----------------------------
+#
 test_metrics = final_trainer.evaluate(test_ds)
 print("\nTEST METRICS:", test_metrics)
 
