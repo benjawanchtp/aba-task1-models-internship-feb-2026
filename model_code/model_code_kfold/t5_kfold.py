@@ -22,11 +22,11 @@ from transformers import (
 # 0) CONFIG
 # ----------------------------
 EXCEL_PATH = "/Users/bbbbben/Desktop/Project in Japan/Task1/ABA Dataset (remove off).xlsx"
-MODEL_NAME = "t5-base"     # เปลี่ยนเป็น "google/flan-t5-small" ก็ได้
+MODEL_NAME = "t5-base"     
 
 SEED = 42
 TEST_SIZE = 0.2
-K_LIST = [1, 3]            # ปรับเป็น [1,3,5,10] ได้ แต่จะใช้เวลามาก
+K_LIST = [1, 3]         
 
 # Excel column positions: A=id, G=text, H=sentiment
 ID_COL_POS = 0
@@ -48,7 +48,6 @@ ID2LABEL = {0: "Negative", 1: "Positive"}
 # ----------------------------
 def build_prompt(text: str) -> str:
     text = str(text).replace("\n", " ").strip()
-    # ให้ชัดเจนว่ามีได้แค่สองคำตอบ
     return f"sentiment (negative or positive): {text}"
 
 def normalize_pred_label(s: str) -> str:
@@ -100,47 +99,38 @@ def load_dataset_from_excel(path: str) -> pd.DataFrame:
 # 3) Build HF dataset (seq2seq)
 # ----------------------------
 def make_hf_dataset(df: pd.DataFrame, tokenizer) -> Dataset:
-    hf = Dataset.from_pandas(df[["id", "text", "sentiment", "label"]].reset_index(drop=True))
+    # 1. เอาเฉพาะคอลัมน์ที่ต้องใช้ทำ input/target
+    hf = Dataset.from_pandas(df[["text", "sentiment"]].reset_index(drop=True))
 
     def preprocess(batch):
         inputs = [build_prompt(t) for t in batch["text"]]
         targets = [str(s).strip().lower() for s in batch["sentiment"]]
 
-        # ✅ วิธีที่ไม่ใช้ as_target_tokenizer (แก้ปัญหา T5Tokenizer ไม่มี method)
-        # transformers รุ่นใหม่ใช้ text_target ได้
-        try:
-            enc = tokenizer(
-                inputs,
-                max_length=MAX_SOURCE_LENGTH,
-                truncation=True,
-                padding=False,
-                text_target=targets,
-                max_target_length=MAX_TARGET_LENGTH,
-            )
-            return enc
-        except TypeError:
-            # fallback ถ้า transformers รุ่นเก่ามาก (ไม่รองรับ text_target)
-            model_inputs = tokenizer(
-                inputs,
-                max_length=MAX_SOURCE_LENGTH,
-                truncation=True,
-                padding=False,
-            )
-            labels = tokenizer(
-                targets,
-                max_length=MAX_TARGET_LENGTH,
-                truncation=True,
-                padding=False,
-            )
-            model_inputs["labels"] = labels["input_ids"]
-            return model_inputs
+        model_inputs = tokenizer(
+            inputs,
+            max_length=MAX_SOURCE_LENGTH,
+            truncation=True,
+            padding="max_length",
+        )
 
-    hf = hf.map(preprocess, batched=True)
+        # บังคับ Tokenize targets ให้เป็น list ของ IDs
+        labels = tokenizer(
+            text_target=targets, 
+            max_length=MAX_TARGET_LENGTH,
+            truncation=True,
+            padding="max_length",
+        )
+
+        model_inputs["labels"] = labels["input_ids"]
+        return model_inputs
+
+    # 2. ตอน map ให้ remove_columns เดิมออกให้หมด เหลือไว้แค่ที่ได้จาก preprocess (input_ids, attention_mask, labels)
+    hf = hf.map(preprocess, batched=True, remove_columns=hf.column_names)
     return hf
-
 # ----------------------------
 # 4) Metrics (decode generated text)
 # ----------------------------
+#ฟังก์ชัน build_compute_metrics สร้างฟังก์ชัน compute_metrics ที่ใช้ในการประเมินผลระหว่างการฝึก โดยจะรับ eval_pred ซึ่งประกอบด้วย preds (token ids ที่โมเดล generate) และ labels (token ids จริงที่มี -100 สำหรับ padding)
 def build_compute_metrics(tokenizer):
     def compute_metrics(eval_pred):
         preds, labels = eval_pred
@@ -184,12 +174,12 @@ def train_one_fold(train_df, val_df, test_df, fold_name: str):
     out_dir = os.path.join("t5_kfold_outputs", fold_name)
     os.makedirs(out_dir, exist_ok=True)
 
-    # ✅ สำคัญ: ปิด save checkpoint ระหว่างเทรน ลดปัญหา "No space left on device"
+    
     args = Seq2SeqTrainingArguments(
         output_dir=out_dir,
         eval_strategy="epoch",
-        save_strategy="no",              # << ปิดการ save ระหว่าง epoch
-        learning_rate=3e-4,              # T5 มักใช้ lr สูงกว่า BERT
+        save_strategy="no",              
+        learning_rate=3e-4,              
         per_device_train_batch_size=BATCH_TRAIN,
         per_device_eval_batch_size=BATCH_EVAL,
         num_train_epochs=EPOCHS,
@@ -208,7 +198,7 @@ def train_one_fold(train_df, val_df, test_df, fold_name: str):
         eval_dataset=val_ds,
         data_collator=data_collator,
         compute_metrics=build_compute_metrics(tokenizer),
-        tokenizer=tokenizer,  # ถ้า transformers รุ่นคุณมี warning ก็ไม่เป็นไร (ยังใช้ได้)
+        #tokenizer=tokenizer,  
     )
 
     # timing

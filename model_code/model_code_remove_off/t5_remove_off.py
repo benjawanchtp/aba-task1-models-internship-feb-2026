@@ -179,7 +179,7 @@ args = Seq2SeqTrainingArguments(
     output_dir="t5_baseremove_off_3class_out",
     eval_strategy="epoch",
     save_strategy="epoch",
-    learning_rate=3e-4,               # ✅ T5 มักใช้สูงกว่า BERT
+    learning_rate=3e-4,               
     per_device_train_batch_size=16,
     per_device_eval_batch_size=16,
     num_train_epochs=3,
@@ -198,7 +198,6 @@ trainer = Seq2SeqTrainer(
     args=args,
     train_dataset=train_ds,
     eval_dataset=val_ds,
-    #tokenizer=tokenizer,           # ตัวนี้จะทำงานได้เมื่อ transformers >= 4.20.0
     data_collator=data_collator,
     compute_metrics=compute_metrics,
 )
