@@ -37,3 +37,20 @@ This is a repository that contains the experiments for ABA Task 1, jointly condu
       - ภายในจะมี folers แยกผลลัพธ์ของแต่ละโมเดล (bert, bart, roberta, T5)
     - model_result_with_off
       - ภายในจะมี folers แยกผลลัพธ์ของแต่ละโมเดล (bert, bart, roberta, T5)
+
+#### Version Dataset ####
+Link : https://docs.google.com/spreadsheets/d/1hf5YqZMAMbDOSIH9OwhQvOTIIBXpdaPV_54rxZbVRdU/edit?gid=850627401#gid=850627401
+File Name : Original ABA Dataset for Version 2 [Oct 23, 2025], Senior Project, MUICT
+
+--- Dataset Process ---
+-- อันนี้เป็น version แรกที่ใช้ในการเทรน คือเป็น version ที่ยังมี sentiment off อยู่ --
+1. เอา column positive + negative review เอามา Merge กัน
+2. remove column 151 id
+-- อันนี้เป็น version สองที่ใช้ในการเทรน คือเป็น version ที่เอา sentiment off ออกแล้ว --
+3. remove sentiment off
+
+#### Config Hugging Face ####
+Link : https://huggingface.co/docs/transformers/trainer
+
+#### requirement list ####
+สร้างชื่อเป็น benjawan_nu (env.)
