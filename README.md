@@ -44,13 +44,17 @@ File Name : Original ABA Dataset for Version 2 [Oct 23, 2025], Senior Project, M
 
 --- Dataset Process ---
 -- อันนี้เป็น version แรกที่ใช้ในการเทรน คือเป็น version ที่ยังมี sentiment off อยู่ --
+ชื่อ dataset : Original ABA Dataset for Version 2 (Oct 23, 2025), Senior Project, MUICT
 1. เอา column positive + negative review เอามา Merge กัน
 2. remove column 151 id
 -- อันนี้เป็น version สองที่ใช้ในการเทรน คือเป็น version ที่เอา sentiment off ออกแล้ว --
-3. remove sentiment off
+ชื่อ dataset : ABA Dataset (remove off)
+4. remove sentiment off
 
 #### Config Hugging Face ####
 Link : https://huggingface.co/docs/transformers/trainer
 
 #### requirement list ####
-สร้างชื่อเป็น benjawan_nu (env.)
+1. สร้าง venv. ใหม่ที่ชื่อว่า benjawan_nu
+2. install lock file (pip install -r requirements.lock.txt)
+3. โหลด env. ไปที่ local machine
