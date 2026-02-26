@@ -121,20 +121,28 @@ This is a repository that contains the experiments for ABA Task 1, jointly condu
 
 #### install & setup ####
 1. create virtual environment
+
 `python -m venv benjawan_nu`
+
 **MacOS/Linux**
-> source benjawan_nu/bin/activate
+
+`source benjawan_nu/bin/activate`
+
 **Window**
-> benjawan_nu\Scripts\activate
+
+`benjawan_nu\Scripts\activate`
 
 2. install dependencies
 (ติดตั้งแพกเกจทั้งหมดจาก lock file)
+
 `pip install -r requirements.lock.txt`
+
 (แนะนำให้อัปเดต pip ก่อนติดตั้ง)
+
 `python -m pip install --upgrade pip`
 
-3. verifly installation
-(ตรวจสอบว่า environment ถูกต้อง)
+3. verifly installation  (ตรวจสอบว่า environment ถูกต้อง)
+
 `pip list`
 
 **requiremrnt**
