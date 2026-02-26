@@ -62,7 +62,45 @@ This is a repository that contains the experiments for ABA Task 1, jointly condu
   - `roberta_base.py`
   - `t5_base.py`
  
-## 3. model_result
+## 3. ตารางผลการทดลอง
+- **with "Off" dataset > BERT-base-uncase, RoBERTa-base, BART-base, T5-base**
+
+  
+| Model              | Accuracy | Precision | Recall  | F1-score |
+|--------------------|---------:|----------:|--------:|---------:|
+| BERT-base-uncase   | 88.08%   | 77.37%    | 68.66%  | 71.94%   |
+| BART-base          | 86.53%   | 71.74%    | 67.98%  | 69.49%   |
+| RoBERTa-base       | 88.60%   | 75.90%    | 75.85%  | 75.86%   |
+| **T5-base**      | **88.60%** | **88.60%** | **77.59%** | **77.97%** |
+
+- **without "Off" dataset > BERT-base-uncase, RoBERTa-base, BART-base, T5-base**
+
+
+| Model              | Accuracy | Precision | Recall  | F1-score |
+|--------------------|---------:|----------:|--------:|---------:|
+| BERT-base-uncase   | 98.16%   | 98.15%    | 98.16%  | 98.15%   |
+| BART-base          | 97.55%   | 97.62%    | 97.55%  | 97.47%   |
+| RoBERTa-base       | 95.71%   | 95.92%    | 95.71%  | 95.47%   |
+| **T5-base**     | **98.77%** | **98.77%** | **98.77%** | **98.77%** |
+
+- **K-Fold = 1 > BERT-base-uncase, RoBERTa-base, BART-base, T5-base**
+
+| Model              | K | Accuracy (mean) | F1-macro (mean) | Precision (mean) | Recall (mean) |
+|--------------------|--:|----------------:|----------------:|-----------------:|--------------:|
+| BERT-base-uncase   | 1 | 0.9723 | 0.9531 | 0.9443 | 0.9625 |
+| BART-base          | 1 | 0.9815 | 0.9676 | 0.9744 | 0.9612 |
+| RoBERTa-base       | 1 | 0.9784 | 0.9625 | 0.9657 | 0.9593 |
+| **T5-base**     | 1 | **0.9846** | **0.9735** | **0.9703** | **0.9768** |
+
+- **K-Fold = 3 > BERT-base-uncase, RoBERTa-base, BART-base, T5-base**
+
+| Model              | K |Accuracy | Precision | Recall  | F1-macro |
+|--------------------|--:|---------:|----------:|--------:|---------:|
+|**BART-base**       | 3 |**0.9846** | **0.9809** | **0.9653** | **0.9729** |
+| T5-base            | 3 |0.9825 | 0.9735 | 0.9664 | 0.9697 |
+| BERT-base-uncase   | 3 |0.9774 | 0.9506 | 0.9749 | 0.9621 |
+| Roberta-base       | 3 |0.9733 | 0.9642 | 0.9424 | 0.9526 |
+ 
 
 
 
@@ -81,7 +119,32 @@ This is a repository that contains the experiments for ABA Task 1, jointly condu
 
 
 
-#### requirement list ####
-1. สร้าง venv. ใหม่ที่ชื่อว่า benjawan_nu
-2. install lock file (pip install -r requirements.lock.txt)
-3. โหลด env. ไปที่ local machine
+#### install & setup ####
+1. create virtual environment
+`python -m venv benjawan_nu`
+**MacOS/Linux**
+> source benjawan_nu/bin/activate
+**Window**
+> benjawan_nu\Scripts\activate
+
+2. install dependencies
+(ติดตั้งแพกเกจทั้งหมดจาก lock file)
+`pip install -r requirements.lock.txt`
+(แนะนำให้อัปเดต pip ก่อนติดตั้ง)
+`python -m pip install --upgrade pip`
+
+3. verifly installation
+(ตรวจสอบว่า environment ถูกต้อง)
+`pip list`
+
+**requiremrnt**
+ใน lock file ตัวอย่างแพกเกจที่ใช้ใน project นี้ :
+- transformers
+- datasets
+- torch
+- scikit-learn
+- optuna
+- pandas
+- numpy
+- evaluate
+
