@@ -133,6 +133,7 @@ This is a repository that contains the experiments for ABA Task 1, jointly condu
 `benjawan_nu\Scripts\activate`
 
 2. install dependencies
+
 (ติดตั้งแพกเกจทั้งหมดจาก lock file)
 
 `pip install -r requirements.lock.txt`
