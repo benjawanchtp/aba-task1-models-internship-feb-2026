@@ -100,7 +100,31 @@ This is a repository that contains the experiments for ABA Task 1, jointly condu
 | T5-base            | 3 |0.9825 | 0.9735 | 0.9664 | 0.9697 |
 | BERT-base-uncase   | 3 |0.9774 | 0.9506 | 0.9749 | 0.9621 |
 | Roberta-base       | 3 |0.9733 | 0.9642 | 0.9424 | 0.9526 |
+
+- **Auto Fine-Tuning w/ Trails = 5**
+
+| Model              | Accuracy | Precision | Recall  | F1-score |
+|--------------------|---------:|----------:|--------:|---------:|
+| BERT-base-uncase   | 97.84%   | 96.57%    | 95.93%  | 96.25%   |
+| BART-base          | 98.15%   | 97.44%    | 96.12%  | 96.76%   |
+| Roberta-base       | 97.23%   | 96.12%    | 94.18%  | 95.11%   |
+| **T5-base**        | **98.15%** | 96.85%  | **96.23%** | **97.50%** |
+
+- **Multi-Task Learning ABA_T5 Prefix Format by T5-base Model**
+
+| Task       | Accuracy  | ROUGE-1   | ROUGE-2   | ROUGE-L   | ROUGE-Lsum |
+|------------|----------:|----------:|----------:|----------:|-----------:|
+| Sentiment  | 0.8346    | -         | -         | -         | -          |
+| Topic      | 0.4191    | -         | -         | -         | -          |
+| Selected   | -         | 0.4259    | 0.3682    | 0.4204    | 0.4196     |
+  
+- **Multi-Task Leraning ABA_T5 Prompt Format by T5-base Model**
  
+| Task      | Accuracy  | ROUGE-1   | ROUGE-2   | ROUGE-L   | ROUGE-Lsum |
+|-----------|----------:|----------:|----------:|----------:|-----------:|
+| Sentiment | 0.9090    | -         | -         | -         | -          |
+| Topic     | 0.9846    | -         | -         | -         | -          |
+| Selected  | -         | 0.9642    | 0.9434    | 0.9638    | 0.9639     |
 
 
 
@@ -118,8 +142,7 @@ This is a repository that contains the experiments for ABA Task 1, jointly condu
 
 
 
-
-#### install & setup ####
+# Install & Setup #
 1. create virtual environment
 
 `python -m venv benjawan_nu`
