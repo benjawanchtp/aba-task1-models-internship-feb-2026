@@ -85,7 +85,7 @@ This is a repository that contains the experiments for ABA Task 1, jointly condu
 
 - **K-Fold = 1 > BERT-base-uncase, RoBERTa-base, BART-base, T5-base**
 
-| Model              | K | Accuracy (mean) | F1-macro (mean) | Precision (mean) | Recall (mean) |
+| Model              | K | Accuracy | F1-macro | Precision | Recall |
 |--------------------|--:|----------------:|----------------:|-----------------:|--------------:|
 | BERT-base-uncase   | 1 | 0.9723 | 0.9531 | 0.9443 | 0.9625 |
 | BART-base          | 1 | 0.9815 | 0.9676 | 0.9744 | 0.9612 |
